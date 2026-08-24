@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Slack Analog — Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #1f2937;
+      --border: #30363d;
+      --accent: #4f8ef7;
+      --accent-h: #6ba3ff;
+      --danger: #f85149;
+      --success: #3fb950;
+      --warn: #d29922;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --radius: 10px;
+      --font: 'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 720px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, .5);
+    }
+
+    .card-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      flex-wrap: wrap;
+    }
+
+    .card-header h1 {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -.015em;
+      flex: 1;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      font-size: .7rem;
+      font-weight: 600;
+      padding: .2rem .65rem;
+      border-radius: 999px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      transition: background .25s, color .25s;
+    }
+
+    .badge.disconnected {
+      background: #2a1215;
+      color: var(--danger);
+    }
+
+    .badge.connected {
+      background: #0d2318;
+      color: var(--success);
+    }
+
+    .badge .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .badge.connected .dot {
+      animation: pulse 1.8s infinite;
+    }
+
+    #online-badge {
+      font-size: .75rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    #online-badge strong {
+      color: var(--success);
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: .35
+      }
+    }
+
+    .connection-panel {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: .6rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .connection-panel input {
+      flex: 1;
+      min-width: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: 'Courier New', monospace;
+      font-size: .82rem;
+      padding: .5rem .85rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    .connection-panel input:focus {
+      border-color: var(--accent);
+    }
+
+    .connection-panel input::placeholder {
+      color: var(--muted);
+    }
+
+    .btn {
+      padding: .5rem 1.1rem;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: .82rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s, transform .1s, opacity .2s;
+    }
+
+    .btn:active {
+      transform: scale(.97);
+    }
+
+    .btn:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-h);
+    }
+
+    .btn-danger {
+      background: #3a1010;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: #5a1a1a;
+    }
+
+    .btn-send {
+      background: var(--accent);
+      color: #fff;
+      padding: .5rem 1rem;
+    }
+
+    .btn-send:hover:not(:disabled) {
+      background: var(--accent-h);
+    }
+
+    .user-row {
+      padding: .6rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+    }
+
+    .user-row label {
+      font-size: .75rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .user-row input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'Courier New', monospace;
+      font-size: .75rem;
+      padding: .35rem .65rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    .user-row input:focus {
+      border-color: var(--accent);
+    }
+
+    .user-row input::placeholder {
+      color: var(--muted);
+    }
+
+    #message-feed {
+      height: 380px;
+      overflow-y: auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: .55rem;
+      scroll-behavior: smooth;
+    }
+
+    #message-feed::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    #message-feed::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #message-feed::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    .msg-item {
+      display: flex;
+      flex-direction: column;
+      gap: .15rem;
+      animation: slideIn .18s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(5px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .msg-meta {
+      font-size: .68rem;
+      color: var(--muted);
+      display: flex;
+      gap: .4rem;
+    }
+
+    .msg-bubble {
+      display: inline-block;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .4rem .7rem;
+      font-size: .875rem;
+      line-height: 1.55;
+      max-width: 100%;
+      word-break: break-word;
+    }
+
+    .msg-item.own .msg-bubble {
+      background: #0d2a4e;
+      border-color: #1d4275;
+    }
+
+    .msg-item.system .msg-bubble {
+      background: transparent;
+      border-color: transparent;
+      color: var(--muted);
+      font-style: italic;
+      font-size: .78rem;
+    }
+
+    .msg-item.history .msg-bubble {
+      opacity: .8;
+    }
+
+    .empty-state {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: .82rem;
+      text-align: center;
+    }
+
+    #typing-indicator {
+      min-height: 1.4rem;
+      padding: .1rem 1.5rem .3rem;
+      font-size: .75rem;
+      color: var(--warn);
+      font-style: italic;
+      transition: opacity .25s;
+    }
+
+    #typing-indicator:empty {
+      opacity: 0;
+    }
+
+    .send-panel {
+      padding: .85rem 1.5rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: .6rem;
+    }
+
+    .send-panel input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: .875rem;
+      padding: .5rem .85rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    .send-panel input:focus {
+      border-color: var(--accent);
+    }
+
+    .send-panel input::placeholder {
+      color: var(--muted);
+    }
+
+    .send-panel input:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+
+    <div class="card-header">
+      <h1>💬 Slack Analog — Chat</h1>
+      <span id="online-badge" style="display:none">🟢 Online: <strong id="online-count">0</strong></span>
+      <span class="badge disconnected" id="status-badge">
+        <span class="dot"></span>
+        <span id="status-text">Disconnected</span>
+      </span>
+    </div>
+
+    <div class="connection-panel">
+      <input id="room-id-input" type="text" placeholder="Room UUID  e.g. 550e8400-e29b-41d4-a716-446655440000"
+        spellcheck="false" />
+      <button class="btn btn-primary" id="btn-connect">Connect</button>
+      <button class="btn btn-danger" id="btn-disconnect" disabled>Disconnect</button>
+    </div>
+
+    <div class="user-row">
+      <label for="user-id-input">user_id (optional):</label>
+      <input id="user-id-input" type="text" placeholder="UUID of the sender — leave blank for anonymous"
+        spellcheck="false" />
+    </div>
+
+    <div id="message-feed">
+      <div class="empty-state" id="empty-state">Connect to a room to start chatting.</div>
+    </div>
+
+    <div id="typing-indicator"></div>
+
+    <div class="send-panel">
+      <input id="msg-input" type="text" placeholder="Type a message…" disabled />
+      <button class="btn btn-send" id="btn-send" disabled>Send</button>
+    </div>
+
+  </div>
+  <script>
+    const roomInput = document.getElementById('room-id-input');
+    const userInput = document.getElementById('user-id-input');
+    const msgInput = document.getElementById('msg-input');
+    const feed = document.getElementById('message-feed');
+    const emptyState = document.getElementById('empty-state');
+    const statusBadge = document.getElementById('status-badge');
+    const statusText = document.getElementById('status-text');
+    const btnConnect = document.getElementById('btn-connect');
+    const btnDisc = document.getElementById('btn-disconnect');
+    const btnSend = document.getElementById('btn-send');
+    const typingEl = document.getElementById('typing-indicator');
+    const onlineBadge = document.getElementById('online-badge');
+    const onlineCount = document.getElementById('online-count');
+
+    let socket = null;
+    let typingTimer = null;
+    const typingUsers = new Set();
+
+
+    function setStatus(connected) {
+      statusBadge.className = 'badge ' + (connected ? 'connected' : 'disconnected');
+      statusText.textContent = connected ? 'Connected' : 'Disconnected';
+      btnConnect.disabled = connected;
+      btnDisc.disabled = !connected;
+      msgInput.disabled = !connected;
+      btnSend.disabled = !connected;
+      onlineBadge.style.display = connected ? '' : 'none';
+      if (connected) msgInput.focus();
+    }
+
+    function setOnlineUsers(users) {
+      onlineCount.textContent = users.length;
+    }
+
+    function scrollFeed() {
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function removeEmptyState() {
+      if (emptyState && emptyState.parentNode === feed) feed.removeChild(emptyState);
+    }
+
+    function appendMessage({ content, user_id = null, username = null, created_at = null, own = false, system = false, history = false }) {
+      removeEmptyState();
+
+      const item = document.createElement('div');
+      item.className = 'msg-item'
+        + (own ? ' own' : '')
+        + (system ? ' system' : '')
+        + (history ? ' history' : '');
+
+      if (!system) {
+        const meta = document.createElement('div');
+        meta.className = 'msg-meta';
+        const sender = document.createElement('span');
+        if (username) {
+          sender.textContent = `🧑 ${username}`;
+        } else if (user_id) {
+          sender.textContent = `🧑 ${user_id.slice(0, 8)}…`;
+        } else {
+          sender.textContent = '👤 anonymous';
+        }
+        const ts = document.createElement('span');
+        ts.textContent = created_at
+          ? new Date(created_at).toLocaleTimeString()
+          : new Date().toLocaleTimeString();
+        meta.append(sender, ts);
+        item.appendChild(meta);
+      }
+
+      const bubble = document.createElement('div');
+      bubble.className = 'msg-bubble';
+      bubble.textContent = content;
+      item.appendChild(bubble);
+
+      feed.appendChild(item);
+      scrollFeed();
+    }
+
+
+    function showTyping(userId, username) {
+      const label = username ?? (userId ? userId.slice(0, 8) + '…' : 'Someone');
+      typingUsers.add(label);
+      renderTyping();
+
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => {
+        typingUsers.clear();
+        renderTyping();
+      }, 3000);
+    }
+
+    function renderTyping() {
+      if (typingUsers.size === 0) {
+        typingEl.textContent = '';
+        return;
+      }
+      const names = [...typingUsers].join(', ');
+      typingEl.textContent = `✏️ ${names} друкує…`;
+    }
+
+
+    function handleServerEvent(envelope) {
+      const { type, data } = envelope;
+
+      switch (type) {
+
+        case 'history': {
+          if (data.messages.length === 0) {
+            appendMessage({ content: 'Немає повідомлень в цій кімнаті. Напишіть перший!', system: true });
+          } else {
+            const myId = userInput.value.trim();
+            for (const m of data.messages) {
+              appendMessage({
+                content: m.content,
+                user_id: m.user_id,
+                username: m.username,
+                created_at: m.created_at,
+                own: myId && m.user_id === myId,
+                history: true,
+              });
+            }
+          }
+          setOnlineUsers(data.online_users ?? []);
+          break;
+        }
+
+        case 'message': {
+          const myId = userInput.value.trim();
+          const isOwn = myId && data.user_id === myId;
+          appendMessage({
+            content: data.content,
+            user_id: data.user_id,
+            username: data.username,
+            created_at: data.created_at,
+            own: isOwn,
+          });
+          break;
+        }
+
+        case 'typing':
+          showTyping(data.user_id, data.username);
+          break;
+
+        case 'user_joined': {
+          const name = data.username ?? `${data.user_id.slice(0, 8)}…`;
+          appendMessage({
+            content: `🟢 ${name} приєднався до кімнати`,
+            system: true,
+          });
+          setOnlineUsers(data.online_users ?? []);
+          break;
+        }
+
+        case 'user_left': {
+          const name = data.username ?? `${data.user_id.slice(0, 8)}…`;
+          appendMessage({
+            content: `🔴 ${name} покинув кімнату`,
+            system: true,
+          });
+          setOnlineUsers(data.online_users ?? []);
+          break;
+        }
+
+        case 'error':
+          appendMessage({ content: `⚠️ ${data.detail}`, system: true });
+          break;
+
+        default:
+          appendMessage({ content: `[unknown event: ${type}]`, system: true });
+      }
+    }
+
+
+    function connect() {
+      const roomId = roomInput.value.trim();
+      if (!roomId) { alert('Please enter a Room UUID first.'); return; }
+
+      const userId = userInput.value.trim();
+      const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsHost = location.host || 'localhost:8000';
+      const userParam = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+      const wsUrl = `${wsProtocol}://${wsHost}/ws/${roomId}${userParam}`;
+
+      appendMessage({ content: `Connecting to ${wsUrl} …`, system: true });
+
+      socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        setStatus(true);
+        appendMessage({ content: `✅ Connected to room ${roomId}`, system: true });
+      };
+
+      socket.onmessage = (event) => {
+        let envelope;
+        try {
+          envelope = JSON.parse(event.data);
+        } catch {
+          appendMessage({ content: `[raw] ${event.data}`, system: true });
+          return;
+        }
+        handleServerEvent(envelope);
+      };
+
+      socket.onclose = (event) => {
+        setStatus(false);
+        typingUsers.clear();
+        renderTyping();
+        const reason = event.reason || 'connection closed';
+        appendMessage({ content: `🔌 Disconnected (code ${event.code}) — ${reason}`, system: true });
+        socket = null;
+      };
+
+      socket.onerror = () => {
+        appendMessage({ content: '❌ WebSocket error — see browser console for details.', system: true });
+      };
+    }
+
+    function disconnect() {
+      if (socket) { socket.close(1000, 'User disconnected'); socket = null; }
+    }
+
+
+    function sendMessage() {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      const content = msgInput.value.trim();
+      if (!content) return;
+      socket.send(JSON.stringify({ type: 'message', content }));
+      msgInput.value = '';
+      msgInput.focus();
+    }
+
+
+    let typingSentTimer = null;
+    let isTyping = false;
+
+    function onInputTyping() {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      if (!isTyping) {
+        isTyping = true;
+        socket.send(JSON.stringify({ type: 'typing' }));
+      }
+      clearTimeout(typingSentTimer);
+      typingSentTimer = setTimeout(() => { isTyping = false; }, 2000);
+    }
+
+
+    btnConnect.addEventListener('click', connect);
+    btnDisc.addEventListener('click', disconnect);
+    btnSend.addEventListener('click', sendMessage);
+
+    msgInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+    msgInput.addEventListener('input', onInputTyping);
+
+    roomInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') connect(); });
+  </script>
+</body>
+
+</html>

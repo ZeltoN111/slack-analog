@@ -1,0 +1,1 @@
+# Slack Analog application package
