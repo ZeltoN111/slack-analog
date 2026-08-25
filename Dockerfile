@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN pip install --no-cache-dir fastapi uvicorn sqlalchemy asyncpg pydantic-settings websockets
+RUN pip install --no-cache-dir fastapi uvicorn sqlalchemy asyncpg pydantic-settings websockets redis
 
 RUN useradd --create-home appuser
 USER appuser

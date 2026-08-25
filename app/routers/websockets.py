@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.database import async_session_factory
 from app.models import User, Room, Message
 from app.services.websockets_manager import manager
+from app.services.redis_service import redis_service
 
 logger = logging.getLogger(__name__)
 MAX_WS_PAYLOAD_BYTES = 16_384
@@ -33,28 +34,6 @@ async def websocket_endpoint(
     websocket: WebSocket,
     user_id: uuid.UUID | None = Query(default=None),
 ) -> None:
-    """
-    Real-time chat endpoint.
-
-    Query params:
-        user_id (optional UUID) — identifies the connecting user.
-
-    Server → client events:
-        {"type": "history",     "data": {"messages": [...], "online_users": [...]}}
-        {"type": "message",     "data": {id, room_id, user_id, username, content, created_at}}
-        {"type": "typing",      "data": {"user_id": str | null, "username": str | null}}
-        {"type": "user_joined", "data": {"user_id": str, "username": str | null, "online_users": [...]}}
-        {"type": "user_left",   "data": {"user_id": str, "username": str | null, "online_users": [...]}}
-        {"type": "error",       "data": {"detail": str}}
-
-    Client → server events:
-        {"type": "message", "content": str}
-        {"type": "typing"}
-
-    Close codes:
-        4004 — room does not exist.
-    """
-    # 1. Verify room + resolve username in a single DB round-trip.
     async with async_session_factory() as session:
         room_result = await session.execute(
             select(Room).where(Room.id == room_id)
@@ -78,10 +57,14 @@ async def websocket_endpoint(
                 return
             conn_username = user_obj.username
 
-    # 2. Accept & register connection.
+    # 2. Accept & register connection (local registry + Redis Pub/Sub subscription).
     await manager.connect(room_id, websocket, user_id)
 
-    # 3. Send message history + current online list to the new client only.
+    # 3. Mark global presence in Redis.
+    if user_id is not None:
+        await redis_service.set_presence(room_id, user_id)
+
+    # 4. Send message history + current global online list to the new client only.
     try:
         async with async_session_factory() as session:
             history_result = await session.execute(
@@ -100,31 +83,35 @@ async def websocket_endpoint(
                     _msg_to_dict(m, username=m.user.username if m.user else None)
                     for m in history_msgs
                 ],
-                "online_users": manager.get_online_users(room_id),
+                "online_users": await redis_service.get_online_users(room_id),
             },
         })
     except WebSocketDisconnect:
         manager.disconnect(room_id, websocket)
+        if user_id is not None:
+            await redis_service.remove_presence(room_id, user_id)
         raise
     except Exception:
         manager.disconnect(room_id, websocket)
+        if user_id is not None:
+            await redis_service.remove_presence(room_id, user_id)
         logger.exception("WS history failed | room=%s user=%s", room_id, user_id)
         raise
 
-    # 4. Notify all other peers that this user joined.
+    # 5. Notify all peers (across instances) that this user joined.
     if user_id is not None:
-        await manager.broadcast_to_room(
+        await manager.publish_event(
             room_id,
             event_type="user_joined",
             data={
                 "user_id":      str(user_id),
                 "username":     conn_username,
-                "online_users": manager.get_online_users(room_id),
+                "online_users": await redis_service.get_online_users(room_id),
             },
             exclude=websocket,
         )
 
-    # 5. Main receive loop.
+    # 6. Main receive loop.
     try:
         while True:
             try:
@@ -170,8 +157,12 @@ async def websocket_endpoint(
                 })
                 continue
 
+            # Any valid frame from a known user counts as activity: refresh presence TTL.
+            if user_id is not None:
+                await redis_service.refresh_presence(room_id, user_id)
+
             if event_type == "typing":
-                await manager.broadcast_to_room(
+                await manager.publish_event(
                     room_id,
                     event_type="typing",
                     data={
@@ -223,28 +214,31 @@ async def websocket_endpoint(
                         if user_obj:
                             username = user_obj.username
 
-                await manager.broadcast_to_room(
+                await manager.publish_event(
                     room_id,
                     event_type="message",
                     data=_msg_to_dict(msg, username=username),
                 )
 
-    # 6. Handle disconnection.
+    # 7. Handle disconnection.
     except WebSocketDisconnect:
         left_user_id = manager.disconnect(room_id, websocket)
         logger.info("WS client left | room=%s user=%s", room_id, left_user_id)
 
         if left_user_id is not None:
-            await manager.broadcast_to_room(
+            await redis_service.remove_presence(room_id, left_user_id)
+            await manager.publish_event(
                 room_id,
                 event_type="user_left",
                 data={
                     "user_id":      str(left_user_id),
                     "username":     conn_username,
-                    "online_users": manager.get_online_users(room_id),
+                    "online_users": await redis_service.get_online_users(room_id),
                 },
             )
     except Exception:
-        manager.disconnect(room_id, websocket)
+        left_user_id = manager.disconnect(room_id, websocket)
+        if left_user_id is not None:
+            await redis_service.remove_presence(room_id, left_user_id)
         logger.exception("WS client failed | room=%s user=%s", room_id, user_id)
         raise
