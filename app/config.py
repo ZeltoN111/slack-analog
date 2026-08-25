@@ -5,6 +5,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     DATABASE_URL: str
+    REDIS_URL: str
     CORS_ORIGINS: list[str] = [
         "http://localhost:8000",
         "http://127.0.0.1:8000",

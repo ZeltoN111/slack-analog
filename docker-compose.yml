@@ -3,6 +3,8 @@ services:
     image: postgres:16-alpine
     container_name: slack_postgres
     restart: always
+    ports:
+      - "5433:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -13,7 +15,14 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: slack_redis
+    restart: always
+    ports:
+      - "6379:6379"
 
   api:
     build: .

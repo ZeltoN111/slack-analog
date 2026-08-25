@@ -6,6 +6,8 @@ from fastapi.responses import FileResponse
 
 from app.database import init_db
 from app.routers import users, rooms, messages, websockets
+from app.services.redis_service import redis_service
+from app.services.websockets_manager import manager
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -13,7 +15,11 @@ STATIC_DIR = Path(__file__).parent / "static"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await redis_service.init()
+    await manager.init()
     yield
+    await manager.close()
+    await redis_service.close()
 
 
 from fastapi.middleware.cors import CORSMiddleware
