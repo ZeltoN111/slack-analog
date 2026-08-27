@@ -10,6 +10,7 @@ from app.database import async_session_factory
 from app.models import User, Room, Message
 from app.services.websockets_manager import manager
 from app.services.redis_service import redis_service
+from app.workers.webhook_dispatcher import dispatcher
 
 logger = logging.getLogger(__name__)
 MAX_WS_PAYLOAD_BYTES = 16_384
@@ -57,14 +58,11 @@ async def websocket_endpoint(
                 return
             conn_username = user_obj.username
 
-    # 2. Accept & register connection (local registry + Redis Pub/Sub subscription).
     await manager.connect(room_id, websocket, user_id)
 
-    # 3. Mark global presence in Redis.
     if user_id is not None:
         await redis_service.set_presence(room_id, user_id)
 
-    # 4. Send message history + current global online list to the new client only.
     try:
         async with async_session_factory() as session:
             history_result = await session.execute(
@@ -98,7 +96,6 @@ async def websocket_endpoint(
         logger.exception("WS history failed | room=%s user=%s", room_id, user_id)
         raise
 
-    # 5. Notify all peers (across instances) that this user joined.
     if user_id is not None:
         await manager.publish_event(
             room_id,
@@ -111,7 +108,6 @@ async def websocket_endpoint(
             exclude=websocket,
         )
 
-    # 6. Main receive loop.
     try:
         while True:
             try:
@@ -157,7 +153,6 @@ async def websocket_endpoint(
                 })
                 continue
 
-            # Any valid frame from a known user counts as activity: refresh presence TTL.
             if user_id is not None:
                 await redis_service.refresh_presence(room_id, user_id)
 
@@ -219,8 +214,13 @@ async def websocket_endpoint(
                     event_type="message",
                     data=_msg_to_dict(msg, username=username),
                 )
+                await dispatcher.notify_message_created(
+                    room_id,
+                    content=msg.content,
+                    username=username,
+                    created_at=msg.created_at,
+                )
 
-    # 7. Handle disconnection.
     except WebSocketDisconnect:
         left_user_id = manager.disconnect(room_id, websocket)
         logger.info("WS client left | room=%s user=%s", room_id, left_user_id)

@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from app.database import get_db
 from app.models import Room, Message, User
 from app.schemas import MessageCreate, MessageResponse
+from app.workers.webhook_dispatcher import dispatcher
 
 router = APIRouter(tags=["messages"])
 
@@ -26,10 +27,14 @@ async def create_message(
     room_res = await db.execute(select(Room).where(Room.id == room_id))
     if not room_res.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
+
+    sender_username: str | None = None
     if payload.user_id is not None:
         user_res = await db.execute(select(User).where(User.id == payload.user_id))
-        if user_res.scalar_one_or_none() is None:
+        user_obj = user_res.scalar_one_or_none()
+        if user_obj is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        sender_username = user_obj.username
 
     msg = Message(
         room_id=room_id,
@@ -41,6 +46,12 @@ async def create_message(
     try:
         await db.commit()
         await db.refresh(msg)
+        await dispatcher.notify_message_created(
+            room_id,
+            content=msg.content,
+            username=sender_username,
+            created_at=msg.created_at,
+        )
         return msg
     except IntegrityError:
         await db.rollback()

@@ -16,13 +16,6 @@ def _channel_name(room_id: uuid.UUID) -> str:
 
 
 class ConnectionManager:
-    """Registry of WebSocket connections local to this process instance.
-
-    Cross-instance fan-out is done via Redis Pub/Sub: every event is
-    published to a per-room channel, and each instance that currently
-    has local subscribers for that room runs a background listener task
-    which re-broadcasts incoming messages to its own local sockets only.
-    """
 
     def __init__(self) -> None:
         self._rooms: dict[uuid.UUID, dict[WebSocket, uuid.UUID | None]] = {}
@@ -33,11 +26,9 @@ class ConnectionManager:
         logger.info("ConnectionManager ready")
 
     async def close(self) -> None:
-        """Cancel every active room subscription (app shutdown)."""
         for room_id in list(self._listener_tasks):
             self._stop_subscription(room_id)
 
-    # ── Local connection registry ───────────────────────────────────────────
 
     async def connect(
         self,
@@ -71,7 +62,6 @@ class ConnectionManager:
         )
         return left_user_id
 
-    # ── Redis Pub/Sub fan-out ───────────────────────────────────────────────
 
     async def publish_event(
         self,
@@ -80,11 +70,6 @@ class ConnectionManager:
         data: dict,
         exclude: WebSocket | None = None,
     ) -> None:
-        """Publish an event envelope to the room's Redis channel.
-
-        Every instance subscribed to this room (including this one)
-        receives it and re-broadcasts to its own local sockets.
-        """
         envelope: dict = {"type": event_type, "data": data}
         if exclude is not None:
             conn_id = self._conn_ids.get(exclude)

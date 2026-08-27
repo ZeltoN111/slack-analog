@@ -41,7 +41,6 @@ class RedisService:
         return f"presence:{room_id}:{user_id}"
 
     async def set_presence(self, room_id: uuid.UUID, user_id: uuid.UUID) -> None:
-        """Mark a user as online in a room, with a refreshing TTL."""
         await self.client.set(
             self._presence_key(room_id, user_id),
             "1",
@@ -49,7 +48,6 @@ class RedisService:
         )
 
     async def refresh_presence(self, room_id: uuid.UUID, user_id: uuid.UUID) -> None:
-        """Extend the TTL of an existing presence key (heartbeat)."""
         await self.client.expire(
             self._presence_key(room_id, user_id),
             PRESENCE_TTL_SECONDS,
@@ -65,6 +63,17 @@ class RedisService:
         async for key in self.client.scan_iter(match=pattern, count=100):
             user_ids.add(key.split(":", 2)[2])
         return list(user_ids)
+
+    async def check_rate_limit(
+        self,
+        key: str,
+        limit: int = 5,
+        window_seconds: int = 1,
+    ) -> bool:
+        current = await self.client.incr(key)
+        if current == 1:
+            await self.client.expire(key, window_seconds)
+        return current <= limit
 
 
 redis_service = RedisService(settings.REDIS_URL)

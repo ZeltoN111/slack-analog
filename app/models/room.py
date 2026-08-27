@@ -19,3 +19,7 @@ class Room(Base):
     )
 
     messages: Mapped[list["Message"]] = relationship(back_populates="room", cascade="all, delete-orphan")
+    webhooks: Mapped[list["Webhook"]] = relationship(back_populates="room", cascade="all, delete-orphan")
+    webhook_subscriptions: Mapped[list["WebhookSubscription"]] = relationship(
+        back_populates="room", cascade="all, delete-orphan"
+    )
